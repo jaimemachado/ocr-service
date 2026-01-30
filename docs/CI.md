@@ -15,7 +15,7 @@ Image names used in workflows:
 
 Required repository settings / secrets:
 
-- `GITHUB_TOKEN`: Provided automatically in GitHub Actions and used for GHCR authentication. No additional secret is required for publishing to GHCR from within GitHub Actions unless you use a separate account.
+- `GH_TOKEN`: Provided automatically in GitHub Actions and used for GHCR authentication. No additional secret is required for publishing to GHCR from within GitHub Actions unless you use a separate account.
 
 Repository permissions:
 
@@ -28,5 +28,5 @@ Enabling GHCR access (if needed):
 
 Notes:
 
-- The workflows use the default `GITHUB_TOKEN` which is sufficient to publish packages to the same repository's GHCR namespace.
+- The workflows use the default `GH` which is sufficient to publish packages to the same repository's GHCR namespace.
 - If you want to publish to a Docker Hub account instead, replace the login and tags in the workflow and add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to repository secrets.
