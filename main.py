@@ -4,10 +4,11 @@ OCR Service - FastAPI application for processing PDFs with OCR
 import os
 import tempfile
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from pdf2image import convert_from_path
 from doctr.io import DocumentFile
@@ -18,6 +19,12 @@ from PIL import Image
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configuration
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+MIN_DPI = 72
+MAX_DPI = 600
+DEFAULT_DPI = 300
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -59,7 +66,73 @@ async def health():
     }
 
 
-def pdf_to_images(pdf_path: str, dpi: int = 300) -> List[Image.Image]:
+def validate_dpi(dpi: int) -> int:
+    """
+    Validate DPI parameter
+    
+    Args:
+        dpi: DPI value to validate
+    
+    Returns:
+        Validated DPI value
+    
+    Raises:
+        HTTPException: If DPI is out of valid range
+    """
+    if dpi < MIN_DPI or dpi > MAX_DPI:
+        raise HTTPException(
+            status_code=400,
+            detail=f"DPI must be between {MIN_DPI} and {MAX_DPI}"
+        )
+    return dpi
+
+
+async def save_upload_file(upload_file: UploadFile, destination: Path) -> int:
+    """
+    Save uploaded file and validate size
+    
+    Args:
+        upload_file: The uploaded file
+        destination: Path to save the file
+    
+    Returns:
+        Size of the file in bytes
+    
+    Raises:
+        HTTPException: If file is too large
+    """
+    file_size = 0
+    with open(destination, "wb") as f:
+        while True:
+            chunk = await upload_file.read(1024 * 1024)  # Read 1MB at a time
+            if not chunk:
+                break
+            file_size += len(chunk)
+            if file_size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+                )
+            f.write(chunk)
+    return file_size
+
+
+def cleanup_file(filepath: str):
+    """
+    Background task to clean up temporary files
+    
+    Args:
+        filepath: Path to the file to delete
+    """
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            logger.info(f"Cleaned up temporary file: {filepath}")
+    except Exception as e:
+        logger.error(f"Error cleaning up file {filepath}: {e}")
+
+
+def pdf_to_images(pdf_path: str, dpi: int = DEFAULT_DPI) -> List[Image.Image]:
     """
     Convert PDF pages to images using Poppler
     
@@ -138,6 +211,10 @@ def embed_text_layer(input_pdf_path: str, output_pdf_path: str) -> None:
     """
     Use ocrmypdf to embed text layer in PDF
     
+    Note: This performs OCR using Tesseract (via ocrmypdf) to create a 
+    searchable PDF with an embedded text layer. This is separate from the 
+    docTR OCR which is used for text extraction and bounding boxes.
+    
     Args:
         input_pdf_path: Path to input PDF
         output_pdf_path: Path to output PDF with text layer
@@ -160,20 +237,28 @@ def embed_text_layer(input_pdf_path: str, output_pdf_path: str) -> None:
         logger.info("Text layer embedded successfully")
     except Exception as e:
         logger.error(f"Error embedding text layer: {e}")
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to embed text layer in PDF"
+        )
 
 
 @app.post("/process-pdf", response_class=FileResponse)
 async def process_pdf(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to process"),
-    dpi: int = 300
+    dpi: int = DEFAULT_DPI
 ):
     """
     Process a PDF file with OCR and return the PDF with embedded text layer
     
+    This endpoint uses ocrmypdf to create a searchable PDF with embedded text layer.
+    The output is ready for import into Paperless-ngx which will skip its own OCR.
+    
     Args:
+        background_tasks: FastAPI background tasks for cleanup
         file: Uploaded PDF file
-        dpi: Resolution for PDF to image conversion (default: 300)
+        dpi: Resolution for PDF to image conversion (default: 300, range: 72-600)
     
     Returns:
         PDF file with embedded text layer
@@ -181,59 +266,68 @@ async def process_pdf(
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
-    # Create temporary directory for processing
-    with tempfile.TemporaryDirectory() as temp_dir:
+    # Validate DPI
+    dpi = validate_dpi(dpi)
+    
+    # Create a unique temporary directory for this request
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
         temp_path = Path(temp_dir)
         
-        # Save uploaded PDF
+        # Save uploaded PDF with size validation
         input_pdf_path = temp_path / "input.pdf"
         logger.info(f"Saving uploaded PDF: {file.filename}")
+        file_size = await save_upload_file(file, input_pdf_path)
+        logger.info(f"Saved PDF: {file_size / (1024*1024):.2f}MB")
         
-        with open(input_pdf_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+        # Use ocrmypdf to embed text layer
+        output_pdf_path = temp_path / "output.pdf"
+        embed_text_layer(str(input_pdf_path), str(output_pdf_path))
         
-        try:
-            # Step 1: Convert PDF to images
-            images = pdf_to_images(str(input_pdf_path), dpi=dpi)
-            
-            # Step 2: Run docTR OCR on images
-            ocr_data = run_ocr_on_images(images)
-            
-            # Log extracted text preview
-            preview = ocr_data["full_text"][:200]
-            logger.info(f"Extracted text preview: {preview}...")
-            
-            # Step 3: Use ocrmypdf to embed text layer
-            output_pdf_path = temp_path / "output.pdf"
-            embed_text_layer(str(input_pdf_path), str(output_pdf_path))
-            
-            # Return the processed PDF
-            return FileResponse(
-                path=str(output_pdf_path),
-                media_type="application/pdf",
-                filename=f"ocr_{file.filename}"
-            )
+        # Copy output to a persistent temporary location
+        final_output_path = tempfile.mktemp(suffix=".pdf")
+        shutil.copy2(str(output_pdf_path), final_output_path)
         
-        except Exception as e:
-            logger.error(f"Error processing PDF: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error processing PDF: {str(e)}"
-            )
+        # Schedule cleanup of both directories
+        background_tasks.add_task(cleanup_file, final_output_path)
+        background_tasks.add_task(shutil.rmtree, temp_dir)
+        
+        # Return the processed PDF
+        return FileResponse(
+            path=final_output_path,
+            media_type="application/pdf",
+            filename=f"ocr_{file.filename}"
+        )
+    
+    except HTTPException:
+        # Clean up on known errors
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as e:
+        # Clean up on unexpected errors
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        logger.error(f"Error processing PDF: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while processing the PDF"
+        )
 
 
 @app.post("/extract-text")
 async def extract_text(
     file: UploadFile = File(..., description="PDF file to process"),
-    dpi: int = 300
+    dpi: int = DEFAULT_DPI
 ):
     """
     Extract text from PDF using OCR without modifying the PDF
     
+    This endpoint uses docTR to extract text and bounding boxes for analysis.
+    Use this when you need the OCR data without embedding it in the PDF.
+    
     Args:
         file: Uploaded PDF file
-        dpi: Resolution for PDF to image conversion (default: 300)
+        dpi: Resolution for PDF to image conversion (default: 300, range: 72-600)
     
     Returns:
         JSON with extracted text and bounding boxes
@@ -241,37 +335,48 @@ async def extract_text(
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
+    # Validate DPI
+    dpi = validate_dpi(dpi)
+    
     # Create temporary directory for processing
-    with tempfile.TemporaryDirectory() as temp_dir:
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
         temp_path = Path(temp_dir)
         
-        # Save uploaded PDF
+        # Save uploaded PDF with size validation
         input_pdf_path = temp_path / "input.pdf"
         logger.info(f"Saving uploaded PDF: {file.filename}")
+        file_size = await save_upload_file(file, input_pdf_path)
+        logger.info(f"Saved PDF: {file_size / (1024*1024):.2f}MB")
         
-        with open(input_pdf_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+        # Convert PDF to images
+        images = pdf_to_images(str(input_pdf_path), dpi=dpi)
         
-        try:
-            # Convert PDF to images
-            images = pdf_to_images(str(input_pdf_path), dpi=dpi)
-            
-            # Run docTR OCR on images
-            ocr_data = run_ocr_on_images(images)
-            
-            return {
-                "filename": file.filename,
-                "pages": ocr_data["pages"],
-                "full_text": ocr_data["full_text"]
-            }
+        # Run docTR OCR on images
+        ocr_data = run_ocr_on_images(images)
         
-        except Exception as e:
-            logger.error(f"Error extracting text: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error extracting text: {str(e)}"
-            )
+        # Clean up
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        return {
+            "filename": file.filename,
+            "pages": ocr_data["pages"],
+            "full_text": ocr_data["full_text"]
+        }
+    
+    except HTTPException:
+        # Clean up on known errors
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as e:
+        # Clean up on unexpected errors
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        logger.error(f"Error extracting text: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while extracting text from the PDF"
+        )
 
 
 if __name__ == "__main__":

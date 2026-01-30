@@ -170,6 +170,8 @@ This approach is faster and can use GPU acceleration for better performance.
 - **CPU Mode**: Processes ~1-2 pages per second
 - **GPU Mode**: Processes ~5-10 pages per second (depending on GPU)
 - **Memory**: ~2-4GB RAM for typical documents
+- **File Size Limit**: 100MB per upload (configurable in main.py)
+- **DPI Range**: 72-600 DPI (default: 300)
 
 ## Development
 
@@ -197,12 +199,36 @@ ocr-service/
 
 ## How It Works
 
-1. **Upload**: Client uploads a PDF file
-2. **Save**: PDF is saved to temporary storage
+### Process PDF Endpoint (`/process-pdf`)
+
+This endpoint creates a PDF with an embedded searchable text layer using ocrmypdf:
+
+1. **Upload**: Client uploads a PDF file (max 100MB)
+2. **Save**: PDF is saved to temporary storage with size validation
+3. **OCR**: ocrmypdf processes the PDF using Tesseract OCR
+4. **Embed**: Text layer is embedded directly into the PDF structure
+5. **Return**: Processed PDF with searchable text is returned
+
+**Note**: This endpoint uses ocrmypdf (Tesseract) for OCR, which is optimized for creating searchable PDFs. The output is ready for Paperless-ngx import.
+
+### Extract Text Endpoint (`/extract-text`)
+
+This endpoint extracts text and bounding boxes using docTR:
+
+1. **Upload**: Client uploads a PDF file (max 100MB)
+2. **Save**: PDF is saved to temporary storage with size validation
 3. **Convert**: PDF pages are converted to images using Poppler
 4. **OCR**: docTR processes images to detect and recognize text
-5. **Embed**: ocrmypdf embeds the text layer into the original PDF
-6. **Return**: Processed PDF with searchable text is returned
+5. **Return**: JSON with text content and bounding boxes
+
+**Note**: This endpoint uses docTR for detailed text extraction with bounding boxes. Use this when you need precise text location data for analysis or custom processing.
+
+### Why Two OCR Engines?
+
+- **ocrmypdf (Tesseract)**: Best for creating searchable PDFs with embedded text layers. Used by `/process-pdf`.
+- **docTR**: Best for extracting text with precise bounding boxes and higher accuracy on complex layouts. Used by `/extract-text`.
+
+Each endpoint is optimized for its specific use case.
 
 ## Troubleshooting
 

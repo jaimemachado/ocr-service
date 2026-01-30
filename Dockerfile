@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
