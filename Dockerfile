@@ -30,17 +30,19 @@ RUN apt-get update \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
-
-# Install Python dependencies
+# Copy requirements file and install Python dependencies first (cacheable layer)
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY main.py .
+# Copy application code (copy entire repository so modules like database.py are available)
+COPY . .
 
 # Expose port
 EXPOSE 8000
+
+# Ensure logs are not buffered
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
 
 # Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

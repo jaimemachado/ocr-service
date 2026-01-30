@@ -1,0 +1,44 @@
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Python virtualenvs
+.venv
+venv
+env
+ENV
+
+# Byte-compiled / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Temporary files
+tmp/
+tmp/**
+*.log
+
+# Secrets and environment
+.env
+.env.*
+
+# Nix / dev artifacts
+.nix-profile
+.nix-channels
+result
+flake.lock
+
+# Node
+node_modules/
