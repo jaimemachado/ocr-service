@@ -44,6 +44,9 @@ ocr_model: Any = None
 # Templates
 templates = Jinja2Templates(directory="templates")
 
+# Ensure static directory exists before mounting (tests run at import time)
+Path("static").mkdir(parents=True, exist_ok=True)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
