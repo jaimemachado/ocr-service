@@ -285,11 +285,13 @@ async def process_pdf(
         output_pdf_path = temp_path / "output.pdf"
         embed_text_layer(str(input_pdf_path), str(output_pdf_path))
         
-        # Copy output to a persistent temporary location
-        final_output_path = tempfile.mktemp(suffix=".pdf")
-        shutil.copy2(str(output_pdf_path), final_output_path)
+        # Copy output to a persistent temporary location using secure temp file
+        with tempfile.NamedTemporaryFile(mode='wb', suffix=".pdf", delete=False) as tmp_file:
+            final_output_path = tmp_file.name
+            with open(output_pdf_path, 'rb') as src:
+                shutil.copyfileobj(src, tmp_file)
         
-        # Schedule cleanup of both directories
+        # Schedule cleanup of both files/directories
         background_tasks.add_task(cleanup_file, final_output_path)
         background_tasks.add_task(shutil.rmtree, temp_dir)
         
