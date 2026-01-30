@@ -1,0 +1,139 @@
+name: CI Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, copilot/**]
+
+jobs:
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Run Black (code formatter check)
+        run: black --check .
+        continue-on-error: true
+      
+      - name: Run isort (import sorter check)
+        run: isort --check-only .
+        continue-on-error: true
+      
+      - name: Run flake8 (linter)
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        continue-on-error: true
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils tesseract-ocr ghostscript
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Run pytest
+        run: |
+          if [ -d tests ]; then
+            pytest tests/ -v
+          else
+            echo "No tests directory found, skipping pytest"
+          fi
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t ocr-service:test .
+      
+      - name: Start service
+        run: |
+          docker run -d -p 8000:8000 --name ocr-service-test ocr-service:test
+          sleep 10
+      
+      - name: Wait for service to be ready
+        run: |
+          timeout 30 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+      
+      - name: Test health endpoint
+        run: |
+          curl -f http://localhost:8000/health || exit 1
+      
+      - name: Test process-pdf endpoint with sample PDF
+        run: |
+          # Create a simple test PDF
+          echo "%PDF-1.4" > test.pdf
+          echo "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj" >> test.pdf
+          echo "2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj" >> test.pdf
+          echo "3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj" >> test.pdf
+          echo "xref" >> test.pdf
+          echo "0 4" >> test.pdf
+          echo "0000000000 65535 f " >> test.pdf
+          echo "0000000009 00000 n " >> test.pdf
+          echo "0000000058 00000 n " >> test.pdf
+          echo "0000000115 00000 n " >> test.pdf
+          echo "trailer<</Size 4/Root 1 0 R>>" >> test.pdf
+          echo "startxref" >> test.pdf
+          echo "206" >> test.pdf
+          echo "%%EOF" >> test.pdf
+          
+          # Test the endpoint
+          response=$(curl -s -w "%{http_code}" -X POST http://localhost:8000/process-pdf \
+            -F "file=@test.pdf" \
+            -o output.pdf)
+          
+          if [ "$response" = "200" ]; then
+            echo "✓ process-pdf endpoint test passed"
+          else
+            echo "✗ process-pdf endpoint returned status $response"
+            exit 1
+          fi
+      
+      - name: Check Docker logs
+        if: failure()
+        run: docker logs ocr-service-test
+      
+      - name: Stop service
+        if: always()
+        run: docker stop ocr-service-test && docker rm ocr-service-test
+
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t ocr-service:latest .
+      
+      - name: Verify image was created
+        run: docker images | grep ocr-service
