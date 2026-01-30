@@ -1,5 +1,7 @@
 # OCR Service
 
+![CI](https://github.com/jaimemachado/ocr-service/actions/workflows/ci-docker-publish.yml/badge.svg)
+
 A FastAPI-based microservice for processing PDF files with OCR (Optical Character Recognition). This service uses docTR for text detection and recognition, and ocrmypdf to embed text layers into PDFs.
 
 ## Features
@@ -164,6 +166,27 @@ This service is designed to work with Paperless-ngx by pre-processing PDFs with 
 3. Paperless-ngx will detect the text layer and skip its own OCR
 
 This approach is faster and can use GPU acceleration for better performance.
+
+## Docker Image (GitHub Container Registry)
+
+A CI workflow is configured to build and publish a Docker image to GitHub Container Registry (GHCR) on pushes to the `main` branch.
+
+- Image: `ghcr.io/jaimemachado/ocr-service:latest`
+- Built and published by GitHub Actions on push to `main` (see `.github/workflows/ci-docker-publish.yml`).
+
+Pull and run the image:
+
+```bash
+docker pull ghcr.io/jaimemachado/ocr-service:latest
+docker run -p 8000:8000 ghcr.io/jaimemachado/ocr-service:latest
+```
+
+If you prefer to build locally:
+
+```bash
+docker build -t ghcr.io/jaimemachado/ocr-service:latest .
+docker run -p 8000:8000 ghcr.io/jaimemachado/ocr-service:latest
+```
 
 ## Performance
 

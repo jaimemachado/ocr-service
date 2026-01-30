@@ -1,0 +1,30 @@
+[project]
+name = "ocr-service"
+version = "1.0.0"
+description = "PDF OCR processing service using docTR and ocrmypdf"
+requires-python = ">=3.11"
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+# Ignore missing type stubs for third-party libraries
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["main"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "."]
+python_files = ["test_*.py"]

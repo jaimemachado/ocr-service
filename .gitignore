@@ -46,3 +46,8 @@ temp/
 # OS
 .DS_Store
 Thumbs.db
+data/ocr.db
+static/images/566aff3f-b6c9-495f-b079-68765a6b3475/page_1.jpg
+static/images/83fff372-fa49-4e14-803f-cb808765dcaa/page_1.jpg
+static/images/bf154078-33cf-4ac7-8ee4-45a00561e07f/page_1.jpg
+static/images/c1543911-e7b4-490a-8cb7-dc39419bdc31/page_1.jpg

@@ -2,19 +2,26 @@
 """
 Example script demonstrating how to use the OCR service
 """
-import requests
-import sys
 import os
+import sys
+from typing import Any
+
+import requests
 
 
-def process_pdf(pdf_path: str, output_path: str, service_url: str = "http://localhost:8000"):
+def process_pdf(
+    pdf_path: str, output_path: str, service_url: str = "http://localhost:8000"
+) -> bool:
     """
-    Process a PDF file using the OCR service
-    
+    Process a PDF file using the OCR service.
+
     Args:
         pdf_path: Path to input PDF file
         output_path: Path to save output PDF with text layer
         service_url: URL of the OCR service
+
+    Returns:
+        True if processing succeeded, False otherwise
     """
     if not os.path.exists(pdf_path):
         print(f"Error: File not found: {pdf_path}")
@@ -47,13 +54,16 @@ def process_pdf(pdf_path: str, output_path: str, service_url: str = "http://loca
         return False
 
 
-def extract_text(pdf_path: str, service_url: str = "http://localhost:8000"):
+def extract_text(pdf_path: str, service_url: str = "http://localhost:8000") -> dict[str, Any] | None:
     """
-    Extract text from a PDF file using the OCR service
-    
+    Extract text from a PDF file using the OCR service.
+
     Args:
         pdf_path: Path to input PDF file
         service_url: URL of the OCR service
+
+    Returns:
+        Dictionary with extracted text data, or None on failure
     """
     if not os.path.exists(pdf_path):
         print(f"Error: File not found: {pdf_path}")
@@ -86,8 +96,8 @@ def extract_text(pdf_path: str, service_url: str = "http://localhost:8000"):
         return None
 
 
-def main():
-    """Main entry point"""
+def main() -> None:
+    """Main entry point."""
     if len(sys.argv) < 2:
         print("Usage:")
         print("  Process PDF:  python example.py process <input.pdf> [output.pdf]")

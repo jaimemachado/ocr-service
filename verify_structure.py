@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
-Verify that the service structure is complete
+Verify that the service structure is complete.
 """
-import os
 import ast
+import os
 
-def check_file_exists(filepath, description):
-    """Check if a file exists"""
+
+def check_file_exists(filepath: str, description: str) -> bool:
+    """Check if a file exists."""
     exists = os.path.exists(filepath)
     status = "✓" if exists else "✗"
     print(f"{status} {description}: {filepath}")
     return exists
 
-def check_python_syntax(filepath):
-    """Check if Python file has valid syntax"""
+
+def check_python_syntax(filepath: str) -> bool:
+    """Check if Python file has valid syntax."""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath) as f:
             ast.parse(f.read())
         print(f"✓ Valid Python syntax: {filepath}")
         return True
@@ -23,13 +25,19 @@ def check_python_syntax(filepath):
         print(f"✗ Syntax error in {filepath}: {e}")
         return False
 
-def check_function_exists(filepath, function_name):
-    """Check if a function exists in a Python file"""
+
+def check_function_exists(filepath: str, function_name: str) -> bool:
+    """Check if a function exists in a Python file."""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath) as f:
             tree = ast.parse(f.read())
-        
-        functions = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+
+        # Check both sync and async functions
+        functions = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
         exists = function_name in functions
         status = "✓" if exists else "✗"
         print(f"{status} Function '{function_name}' in {filepath}")
@@ -38,8 +46,9 @@ def check_function_exists(filepath, function_name):
         print(f"✗ Error checking {filepath}: {e}")
         return False
 
-def main():
-    """Main verification"""
+
+def main() -> int:
+    """Run main verification and return exit code."""
     print("=" * 60)
     print("OCR Service Structure Verification")
     print("=" * 60)
@@ -70,14 +79,16 @@ def main():
     checks.append(check_function_exists("main.py", "process_pdf"))
     checks.append(check_function_exists("main.py", "extract_text"))
     checks.append(check_function_exists("main.py", "pdf_to_images"))
+    checks.append(check_function_exists("main.py", "preprocess_image_for_ocr"))
     checks.append(check_function_exists("main.py", "run_ocr_on_images"))
     checks.append(check_function_exists("main.py", "embed_text_layer"))
+    checks.append(check_function_exists("main.py", "extract_ocr_data"))
     
     # Check requirements
     print("\n📦 Checking requirements.txt...")
-    with open("requirements.txt", 'r') as f:
+    with open("requirements.txt") as f:
         requirements = f.read()
-        required_packages = ["fastapi", "uvicorn", "pdf2image", "python-doctr", "ocrmypdf"]
+        required_packages = ["fastapi", "uvicorn", "python-doctr", "pymupdf", "opencv-python"]
         for pkg in required_packages:
             exists = pkg in requirements
             status = "✓" if exists else "✗"

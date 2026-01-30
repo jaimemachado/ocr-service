@@ -13,6 +13,15 @@ cd ocr-service
 docker-compose up --build
 
 # Service will be available at http://localhost:8000
+
+### Pull from GitHub Container Registry
+
+You can pull the pre-built image published to GHCR (built on push to `main`):
+
+```bash
+docker pull ghcr.io/jaimemachado/ocr-service:latest
+docker run -p 8000:8000 ghcr.io/jaimemachado/ocr-service:latest
+```
 ```
 
 ### 2. Test the Service

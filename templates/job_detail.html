@@ -1,0 +1,53 @@
+<div class="space-y-4">
+    {# Error message if failed #}
+    {% if job.status == 'failed' and job.error_message %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div class="flex">
+            <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">Processing Failed</h3>
+                <p class="mt-1 text-sm text-red-700">{{ job.error_message }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Page thumbnails #}
+    {% if job.pages and job.pages|length > 0 %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {% for page in job.pages %}
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+            <div class="aspect-[3/4] bg-gray-100">
+                <img src="{{ page.image_path }}" alt="Page {{ page.page_number }}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\'flex items-center justify-center h-full text-gray-400\'>No image</div>'">
+            </div>
+            <div class="p-2">
+                <p class="text-xs font-medium text-gray-700">Page {{ page.page_number }}</p>
+                {% if page.confidence %}<p class="text-xs text-gray-500">{{ (page.confidence * 100) | round(1) }}% confidence</p>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Full text preview #}
+    {% if job.full_text %}
+    <div>
+        <h4 class="text-sm font-medium text-gray-700 mb-2">Extracted Text</h4>
+        <div class="bg-white border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+            <pre class="text-xs text-gray-600 whitespace-pre-wrap">{{ job.full_text[:2000] }}{% if job.full_text|length > 2000 %}...{% endif %}</pre>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Actions #}
+    <div class="flex justify-end space-x-2">
+        <button onclick="deleteJob('{{ job.id }}')" class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50">
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Delete
+        </button>
+    </div>
+</div>
